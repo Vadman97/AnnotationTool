@@ -36,7 +36,7 @@ def processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fp
 	#subprocess.call(["ffmpeg", "-framerate", "30", '-i', folderName+'/frames/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', folderName+'/out.mp4'])
 	proc = subprocess.Popen(["ffmpeg", "-framerate", "30", '-i', folderName+'/frames/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', '-n', folderName+'/out.mp4'], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True)
 
-def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime, personID = -1, fps = False):
+def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime, personID = -1):
 	fi = open(inFile, 'rb')
 	data = fi.read()
 	fi.close()
@@ -91,7 +91,6 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 
 				writer.writerow(row)
 				# write the row to corresponding csv file with adjusted timestamp <-- or some common counter
-				#todo sync up by fps 
 		outfile.close()
 	csvfile.close()
 
@@ -106,27 +105,35 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 # 			writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, personID = personIdx)	
 # 		elif name2 in file:
 # 			writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime)
-def processCSVHelper2(file, name, name2, timeIDMap, absPath, folderName, totalStartMSec, totalEndMSec, startTime, fps):
+def processCSVHelper2(file, name, name2, timeIDMap, absPath, folderName, totalStartMSec, totalEndMSec, startTime):
 	if name in file and ".csv" in file:
 		personIdx = int(file.split(name)[1].split(".csv")[0])
 		if personIdx not in timeIDMap.values():
 			return#continue
-		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, personID = personIdx, fps = fps)	
+		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, personID = personIdx)	
 	elif name2 in file:
-		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, fps = fps)
+		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime)
 
 
 def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps):
 	timeIDMap = dict()
 	totalStartMSec = (startMin * 60 + startSec) * 1000
 	totalEndMSec = (endMin * 60 + endSec) * 1000
+	time = totalStartMSec
 
 	with open(absPath + "logSingleKinectBodyIdxInfo_" + ts + ".csv", "rb") as csvfile:
 		reader = csv.DictReader(csvfile, delimiter=',')
+
 		for row in reader:
-			if int(row["time"]) < totalStartMSec:
+			if fps == False:
+				time = int(row["time"])
+			else:
+				if row["time"] < time:
+					continue
+
+			if time < totalStartMSec:
 				continue
-			if int(row["time"]) > totalEndMSec:
+			if time > totalEndMSec:
 				break
 
 			if row["body_idxs"] is None:
@@ -135,11 +142,15 @@ def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec,
 				continue
 
 			bidx = int(row["body_idxs"].split('|')[1])
-			timeIDMap.update({int(row["time"]): bidx})
+			timeIDMap.update({time: bidx})
+
+			if fps:
+				time += 1000 / fps
+
 	for csvFile in csvList:
 		name = "log" + csvFile + "_" + ts + "_person"
 		name2 = "log" + csvFile + "_" + ts
-		Parallel(n_jobs = 8)(delayed(processCSVHelper2)(file, name, name2, timeIDMap, absPath, folderName, totalStartMSec, totalEndMSec, startTime, fps) for file in os.listdir(absPath))
+		Parallel(n_jobs = 8)(delayed(processCSVHelper2)(file, name, name2, timeIDMap, absPath, folderName, totalStartMSec, totalEndMSec, startTime) for file in os.listdir(absPath))
 
 	#Parallel(n_jobs = 5)(delayed(processCSVHelper)(csvFile, ts, timeIDMap, folderName, totalStartMSec, totalEndMSec, startTime, absPath) for csvFile in csvList)
 	# print repr(timeIDMap)
@@ -197,7 +208,7 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps):
 
 def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = ""):
 	if len(dataSet) == 0:
-		dataSet = "RoboticsOpenHouse2016Data"
+		dataSet = "../Data/" + "RoboticsOpenHouse2016Data"
 	if len(expTime) == 0:
 		expTime = "DataCollection_4-14-2016_9-5-46"
 	else:
