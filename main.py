@@ -7,6 +7,7 @@ import subprocess
 import math
 import parse_eaf
 import json
+import collections
 #from multiprocessing import Process, Manager
 from joblib import Parallel, delayed
 
@@ -132,7 +133,7 @@ def processCSVHelper2(file, name, name2, timeIDMap, absPath, folderName, totalSt
 	elif name2 in file:
 		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, fps = fps)
 
-def createTimingDict(absPath, totalStartMSec, totalEndMSec, fps):
+def createTimingDict(absPath, totalStartMSec, totalEndMSec, ts, fps):
 	timeIDMap = dict()
 	time = totalStartMSec
 	with open(absPath + "logSingleKinectBodyIdxInfo_" + ts + ".csv", "rb") as csvfile:
@@ -190,39 +191,58 @@ def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec,
 	# 			#Simple file, just copy the range we want of the whole file no body idx mapping needed
 
 def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime, labelsDict):
-	with open(absPath + "annotation/labels.csv", 'wb') as csvFile:
-		reader = csv.DictReader(csvfile, delimiter=',')
-		for row in reader:
-			t = row["time"]
-			row.pop("time")
-			labelsDict[t] = row
+	if (os.path.isfile(folderName + "/labels.csv")):
+		with open(folderName + "/labels.csv", 'rb') as csvFile:
+			reader = csv.DictReader(csvFile, delimiter=',')
+			for row in reader:
+				t = row["time"]
+				row.pop("time")
+				labelsDict[t] = row
+			csvFile.close()
 
-	labelData = getActionList(aPathComplete)
-	for time, row in labelsDict:
-		for action, instances in labelData:
+	# print labelsDict
+
+	labelData = parse_eaf.getActionList(aPathComplete)
+	result = copy.deepcopy(labelsDict)
+	result = collections.OrderedDict(sorted(result.items()))
+
+	for time, row in labelsDict.iteritems():
+		for action, instances in labelData.iteritems():
 			if action in row:
 				for inst in instances:
 					start = inst[0]
 					end = inst[1]
 					if time >= start and time <= end:
-						row[action] = 1
+						result[time][action] = 1
 					else:
-						row[action] = 0
-				del labelData[action]
+						result[time][action] = 0
+				# del labelData[action]
 
-	with open(absPath + "annotation/labels.csv", 'wb') as csvFile:
+	print result
+	# TODO doesnt have the right 1/0 values for when the time is actually labeled
+
+	with open(folderName + "/labels.csv", 'wb') as csvFile:
+		print "WRITING"
 		fnames = ["time"]
 		for action in labelData:
 			fnames.append(action)
 		writer = csv.DictWriter(csvFile, delimiter=',', fieldnames=fnames)
+		writer.writeheader()
 
-def processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, timeIDMap):
+		for time, row in result.iteritems():
+			r = dict()
+			r["time"] = time
+			r.update(row)
+			writer.writerow(r)
+
+		csvFile.close()
+
+def processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, timeIDMap):
 	aPath = absPath + "annotation/"
-
-	with open(aPath + 'map.json') as jFile:    
-    	jsonData = json.load(jFile)
-
-    	print jsonData
+	with open(aPath + 'map.json') as jFile:
+		jsonData = json.load(jFile)
+		# JSON format --> name of file: [start time ms, end time ms]
+    	# print jsonData
 
     	labels = ["kicking", "hitting prep", "pointing", "shoving prep", "punching prep", "laughing", "teasing", "aggressive", "inappropriate", 
     	"single", "multiple", "showing fist", "awkward switch", "hitting", "punching", "false positive", "tongue?", "clip", "look over again"] #TODO AUTOMATICALLY GET THESE ALL
@@ -232,15 +252,16 @@ def processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, e
     		for label in labels:
     			labelsDict[time][label] = "N/A"
 
-		for file in os.listdir(aPath):
+    	for file in os.listdir(aPath):
+    		# print file
 			if ".eaf" in file:
 				f = file[:-4]
 				if f in jsonData:
 					sTime = jsonData[f][0]
-					eTime = jsondata[f][1]
+					eTime = jsonData[f][1]
 					createAnnotation(startTime, folderName, absPath, aPath + file, sTime, eTime, labelsDict)
 
-def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations):
+def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations, nV):
 	startTime = 0
 
 	fi = open(absPath + "logSingleKinectBodyIdxInfo_" + ts + ".csv", 'rb')
@@ -258,7 +279,7 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 		startTime = int(row1["time"])
 		#print str(startTime)
 
-	processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps)
+	processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, noVideo = nV)
 
 	csvList = [
 		"CLMHeads", "KinectBeamAudio", "KinectBodies", "KinectFaces", "KinectHDFacePointsCameraSpace",
@@ -269,9 +290,10 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 	totalStartMSec = (startMin * 60 + startSec) * 1000
 	totalEndMSec = (endMin * 60 + endSec) * 1000
 
-	timeIDMap = createTimingDict(absPath, totalStartMSec, totalEndMSec, fps)
+	timeIDMap = createTimingDict(absPath, totalStartMSec, totalEndMSec, ts, fps)
 
-	processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap)
+	# processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap)
+	# TODO UNCOMMENT ^
 
 	#folder multiplePeopleDeidentifiedImageData
 	#processKinectHDFaces("DrawingPointsKinectHDFace", )
@@ -279,11 +301,11 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 	dataList = ["DrawingPointsCLMEyeGaze", "DrawingPointsCLMEyes", "DrawingPointsCLMFace", "DrawingPointsKinectHDFace"]
 	#processSinglePersonData(dataList)
 	if annotations:
-		processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, timeIDMap)
+		processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, timeIDMap)
 
 	return "Success!"
 
-def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", annotations = False):
+def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", annotations = False, nV = False):
 	if len(dataSet) == 0:
 		dataSet = "RoboticsOpenHouse2016Data"
 	if len(expTime) == 0:
@@ -343,7 +365,7 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", a
 
 			if not os.path.exists(folderName):
 				os.makedirs(folderName)
-			return process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations)
+			return process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations, nV)
 			#else:
 			#	return "Error! Folder already exists for this clip"
 
@@ -360,7 +382,7 @@ if __name__ == "__main__":
 		endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
 		processAnnotations = raw_input("Process annotations? (t,f): ")
 		anno = True if processAnnotations == "t" or processAnnotations == "T" else False
-		print str(parseInputs(dataSet, expTime, startTime, endTime, fps = fps, annotations = anno))
+		print str(parseInputs(dataSet, expTime, startTime, endTime, fps = fps, annotations = anno, nV = True))
 	else:
 		res = parse_eaf.getActionList(eaf)
 		for action, instances in res.iteritems():
