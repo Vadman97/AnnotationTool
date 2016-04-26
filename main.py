@@ -9,7 +9,10 @@ import parse_eaf
 #from multiprocessing import Process, Manager
 from joblib import Parallel, delayed
 
+ABS_PATH_TO_DATA = "../Data/"
+
 def processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps):
+	return
 	totalStartSec = startMin * 60 + startSec
 	totalEndSec = endMin * 60 + endSec
 	frameStart = totalStartSec * 30;
@@ -36,7 +39,7 @@ def processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fp
 	#subprocess.call(["ffmpeg", "-framerate", "30", '-i', folderName+'/frames/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', folderName+'/out.mp4'])
 	proc = subprocess.Popen(["ffmpeg", "-framerate", "30", '-i', folderName+'/frames/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', '-n', folderName+'/out.mp4'], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True)
 
-def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime, personID = -1):
+def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime, personID = -1, fps = False):
 	fi = open(inFile, 'rb')
 	data = fi.read()
 	fi.close()
@@ -64,6 +67,7 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 				if t > totalEndMSec:
 					break
 
+				oldT = t
 				counter = 0
 				fail = False
 				# for fps alignment, use fps as t value incrementer instead of single_body_idx file timings
@@ -76,6 +80,11 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 					counter += 1
 				if fail:
 					continue
+
+				if fps:
+					print repr(abs(oldT - t))
+					if abs(oldT - t) > (1000 / fps): #if this row has already been accounted for and should be skipped based on fps skip interval
+						continue
 
 				if counter != 0:
 					pass
@@ -105,14 +114,14 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 # 			writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, personID = personIdx)	
 # 		elif name2 in file:
 # 			writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime)
-def processCSVHelper2(file, name, name2, timeIDMap, absPath, folderName, totalStartMSec, totalEndMSec, startTime):
+def processCSVHelper2(file, name, name2, timeIDMap, absPath, folderName, totalStartMSec, totalEndMSec, startTime, fps):
 	if name in file and ".csv" in file:
 		personIdx = int(file.split(name)[1].split(".csv")[0])
 		if personIdx not in timeIDMap.values():
 			return#continue
-		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, personID = personIdx)	
+		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, personID = personIdx, fps = fps)	
 	elif name2 in file:
-		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime)
+		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, fps = fps)
 
 
 def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps):
@@ -150,7 +159,7 @@ def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec,
 	for csvFile in csvList:
 		name = "log" + csvFile + "_" + ts + "_person"
 		name2 = "log" + csvFile + "_" + ts
-		Parallel(n_jobs = 8)(delayed(processCSVHelper2)(file, name, name2, timeIDMap, absPath, folderName, totalStartMSec, totalEndMSec, startTime) for file in os.listdir(absPath))
+		Parallel(n_jobs = 8)(delayed(processCSVHelper2)(file, name, name2, timeIDMap, absPath, folderName, totalStartMSec, totalEndMSec, startTime, fps) for file in os.listdir(absPath))
 
 	#Parallel(n_jobs = 5)(delayed(processCSVHelper)(csvFile, ts, timeIDMap, folderName, totalStartMSec, totalEndMSec, startTime, absPath) for csvFile in csvList)
 	# print repr(timeIDMap)
@@ -208,7 +217,7 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps):
 
 def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = ""):
 	if len(dataSet) == 0:
-		dataSet = "../Data/" + "RoboticsOpenHouse2016Data"
+		dataSet = "RoboticsOpenHouse2016Data"
 	if len(expTime) == 0:
 		expTime = "DataCollection_4-14-2016_9-5-46"
 	else:
@@ -220,7 +229,7 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = ""):
 		endTime ="1:0"
 	if len(fps) == 0:
 		fps = False
-	else
+	else:
 		fps = int(fps)
 
 	ts = expTime.split('DataCollection_')[1]
@@ -250,17 +259,17 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = ""):
 		if startSec == endSec:
 			endSec += 1
 
-	absPath = dataSet + '/' + expTime + '/'
+	absPath = ABS_PATH_TO_DATA + dataSet + '/' + expTime + '/'
 
-	if os.path.exists(dataSet):
-		if os.path.exists(dataSet + '/' + expTime):
+	if os.path.exists(ABS_PATH_TO_DATA + dataSet):
+		if os.path.exists(ABS_PATH_TO_DATA + dataSet + '/' + expTime):
 
 			if len(inFolder) != 0:
 				prefix = str(inFolder) + "/"
 			else:
 				prefix = ""
 
-			folderName = prefix + "experiment_clip_" + dataSet + "_" + ts + "_" + str(startMin) + "." + str(startSec) + "-" + str(endMin) + "." + str(endSec)
+			folderName = ABS_PATH_TO_DATA + prefix + "experiment_clip_" + dataSet + "_" + ts + "_" + str(startMin) + "." + str(startSec) + "-" + str(endMin) + "." + str(endSec)
 
 			print "Output will be generated in folder: " + folderName
 
@@ -270,7 +279,7 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = ""):
 			#else:
 			#	return "Error! Folder already exists for this clip"
 
-	return "Error! Experiment with given data set and timestamp not found."
+	return "Error! Experiment with given data set and timestamp not found: " + repr(dataSet)
 
 
 if __name__ == "__main__":
