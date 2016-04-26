@@ -290,6 +290,8 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = ""):
 
 
 if __name__ == "__main__":
+	mode = raw_input("Mode of operation: ")
+
 	dataSet = raw_input("Enter a data set folder name: ")
 	expTime = raw_input("Enter an experiment timestamp (eg: 4-14-2016_14-24-38): ")
 	eaf = raw_input("Enter a .eaf file for generation or press ENTER for manual entry: ")
