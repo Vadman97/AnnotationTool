@@ -189,7 +189,7 @@ def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec,
 	# 			writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime)				
 	# 			#Simple file, just copy the range we want of the whole file no body idx mapping needed
 
-def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime, labelsDict, totalStartMSec, totalEndMSec, timeIDMap):
+def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime, labelsDict):
 	with open(absPath + "annotation/labels.csv", 'wb') as csvFile:
 		reader = csv.DictReader(csvfile, delimiter=',')
 		for row in reader:
@@ -224,8 +224,13 @@ def processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, e
 
     	print jsonData
 
-    	labels = ["how do we get these lol"]
-    	labelsDict = 
+    	labels = ["kicking", "hitting prep", "pointing", "shoving prep", "punching prep", "laughing", "teasing", "aggressive", "inappropriate", 
+    	"single", "multiple", "showing fist", "awkward switch", "hitting", "punching", "false positive", "tongue?", "clip", "look over again"] #TODO AUTOMATICALLY GET THESE ALL
+    	labelsDict = dict()
+    	for time in timeIDMap:
+    		labelsDict[time] = dict()
+    		for label in labels:
+    			labelsDict[time][label] = "N/A"
 
 		for file in os.listdir(aPath):
 			if ".eaf" in file:
@@ -233,7 +238,7 @@ def processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, e
 				if f in jsonData:
 					sTime = jsonData[f][0]
 					eTime = jsondata[f][1]
-					createAnnotation(startTime, folderName, absPath, aPath + file, sTime, eTime, labelsDict, totalStartMSec, totalEndMSec, timeIDMap)
+					createAnnotation(startTime, folderName, absPath, aPath + file, sTime, eTime, labelsDict)
 
 def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations):
 	startTime = 0
