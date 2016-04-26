@@ -132,13 +132,9 @@ def processCSVHelper2(file, name, name2, timeIDMap, absPath, folderName, totalSt
 	elif name2 in file:
 		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, fps = fps)
 
-
-def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps):
+def createTimingDict(absPath, totalStartMSec, totalEndMSec, fps):
 	timeIDMap = dict()
-	totalStartMSec = (startMin * 60 + startSec) * 1000
-	totalEndMSec = (endMin * 60 + endSec) * 1000
 	time = totalStartMSec
-
 	with open(absPath + "logSingleKinectBodyIdxInfo_" + ts + ".csv", "rb") as csvfile:
 		reader = csv.DictReader(csvfile, delimiter=',')
 
@@ -165,6 +161,9 @@ def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec,
 			if fps:
 				time += 1000 / fps
 
+	return timeIDMap
+
+def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap):
 	for csvFile in csvList:
 		name = "log" + csvFile + "_" + ts + "_person"
 		name2 = "log" + csvFile + "_" + ts
@@ -190,15 +189,34 @@ def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec,
 	# 			writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime)				
 	# 			#Simple file, just copy the range we want of the whole file no body idx mapping needed
 
-def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime):
-	with open(absPath + "annotation/labels.csv", 'rwb') as csvFile:
-		fnames = ["abstime", "time"]
-		labelData = getActionList(aPathComplete)
+def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime, labelsDict, totalStartMSec, totalEndMSec, timeIDMap):
+	with open(absPath + "annotation/labels.csv", 'wb') as csvFile:
+		reader = csv.DictReader(csvfile, delimiter=',')
+		for row in reader:
+			t = row["time"]
+			row.pop("time")
+			labelsDict[t] = row
+
+	labelData = getActionList(aPathComplete)
+	for time, row in labelsDict:
+		for action, instances in labelData:
+			if action in row:
+				for inst in instances:
+					start = inst[0]
+					end = inst[1]
+					if time >= start and time <= end:
+						row[action] = 1
+					else:
+						row[action] = 0
+				del labelData[action]
+
+	with open(absPath + "annotation/labels.csv", 'wb') as csvFile:
+		fnames = ["time"]
 		for action in labelData:
 			fnames.append(action)
 		writer = csv.DictWriter(csvFile, delimiter=',', fieldnames=fnames)
 
-def processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec):
+def processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, timeIDMap):
 	aPath = absPath + "annotation/"
 
 	with open(aPath + 'map.json') as jFile:    
@@ -206,13 +224,16 @@ def processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, e
 
     	print jsonData
 
+    	labels = ["how do we get these lol"]
+    	labelsDict = 
+
 		for file in os.listdir(aPath):
 			if ".eaf" in file:
 				f = file[:-4]
 				if f in jsonData:
 					sTime = jsonData[f][0]
 					eTime = jsondata[f][1]
-					createAnnotation(startTime, folderName, absPath, aPath + file, sTime, eTime)
+					createAnnotation(startTime, folderName, absPath, aPath + file, sTime, eTime, labelsDict, totalStartMSec, totalEndMSec, timeIDMap)
 
 def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations):
 	startTime = 0
@@ -238,7 +259,14 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 		"CLMHeads", "KinectBeamAudio", "KinectBodies", "KinectFaces", "KinectHDFacePointsCameraSpace",
 		"KinectHDFaces", "KinectRawAudio", "MultipleKinectBodyIdxInfo", "SingleKinectBodyIdxInfo"
 	]
-	processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps)
+
+
+	totalStartMSec = (startMin * 60 + startSec) * 1000
+	totalEndMSec = (endMin * 60 + endSec) * 1000
+
+	timeIDMap = createTimingDict(absPath, totalStartMSec, totalEndMSec, fps)
+
+	processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap)
 
 	#folder multiplePeopleDeidentifiedImageData
 	#processKinectHDFaces("DrawingPointsKinectHDFace", )
@@ -246,7 +274,7 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 	dataList = ["DrawingPointsCLMEyeGaze", "DrawingPointsCLMEyes", "DrawingPointsCLMFace", "DrawingPointsKinectHDFace"]
 	#processSinglePersonData(dataList)
 	if annotations:
-		processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec)
+		processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, timeIDMap)
 
 	return "Success!"
 
