@@ -6,13 +6,15 @@ import copy
 import subprocess
 import math
 import parse_eaf
+import json
 #from multiprocessing import Process, Manager
 from joblib import Parallel, delayed
 
 ABS_PATH_TO_DATA = "../Data/"
 
-def processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps):
-	return
+def processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, noVideo = False):
+	if noVideo:
+		return
 	totalStartSec = startMin * 60 + startSec
 	totalEndSec = endMin * 60 + endSec
 	frameStart = totalStartSec * 30;
@@ -188,7 +190,31 @@ def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec,
 	# 			writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime)				
 	# 			#Simple file, just copy the range we want of the whole file no body idx mapping needed
 
-def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps):
+def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime):
+	with open(absPath + "annotation/labels.csv", 'rwb') as csvFile:
+		fnames = ["abstime", "time"]
+		labelData = getActionList(aPathComplete)
+		for action in labelData:
+			fnames.append(action)
+		writer = csv.DictWriter(csvFile, delimiter=',', fieldnames=fnames)
+
+def processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec):
+	aPath = absPath + "annotation/"
+
+	with open(aPath + 'map.json') as jFile:    
+    	jsonData = json.load(jFile)
+
+    	print jsonData
+
+		for file in os.listdir(aPath):
+			if ".eaf" in file:
+				f = file[:-4]
+				if f in jsonData:
+					sTime = jsonData[f][0]
+					eTime = jsondata[f][1]
+					createAnnotation(startTime, folderName, absPath, aPath + file, sTime, eTime)
+
+def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations):
 	startTime = 0
 
 	fi = open(absPath + "logSingleKinectBodyIdxInfo_" + ts + ".csv", 'rb')
@@ -219,10 +245,12 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps):
 	#folder singlePersonDeidentifiedImageData
 	dataList = ["DrawingPointsCLMEyeGaze", "DrawingPointsCLMEyes", "DrawingPointsCLMFace", "DrawingPointsKinectHDFace"]
 	#processSinglePersonData(dataList)
+	if annotations:
+		processAnnotations(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec)
 
 	return "Success!"
 
-def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = ""):
+def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", annotations = False):
 	if len(dataSet) == 0:
 		dataSet = "RoboticsOpenHouse2016Data"
 	if len(expTime) == 0:
@@ -282,7 +310,7 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = ""):
 
 			if not os.path.exists(folderName):
 				os.makedirs(folderName)
-			return process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps)
+			return process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations)
 			#else:
 			#	return "Error! Folder already exists for this clip"
 
@@ -290,16 +318,16 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = ""):
 
 
 if __name__ == "__main__":
-	mode = raw_input("Mode of operation: ")
-
 	dataSet = raw_input("Enter a data set folder name: ")
 	expTime = raw_input("Enter an experiment timestamp (eg: 4-14-2016_14-24-38): ")
+	fps = raw_input("Enter output video fps: ")
 	eaf = raw_input("Enter a .eaf file for generation or press ENTER for manual entry: ")
 	if (len(eaf) == 0):
 		startTime = raw_input("Enter the data start time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:30) or in miliseconds:
 		endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
-		fps = raw_input("Enter output video fps: ")
-		print str(parseInputs(dataSet, expTime, startTime, endTime, fps))
+		processAnnotations = raw_input("Process annotations? (t,f): ")
+		anno = True if processAnnotations == "t" or processAnnotations == "T" else False
+		print str(parseInputs(dataSet, expTime, startTime, endTime, fps = fps, annotations = anno))
 	else:
 		res = parse_eaf.getActionList(eaf)
 		for action, instances in res.iteritems():
@@ -310,4 +338,4 @@ if __name__ == "__main__":
 				startTime = str(timeTuple[0])
 				endTime = str(timeTuple[1])
 				print "S: " + startTime + " E: " + endTime
-				print str(parseInputs(dataSet, expTime, startTime, endTime, inFolder=a))
+				print str(parseInputs(dataSet, expTime, startTime, endTime, inFolder=a, fps = fps))
