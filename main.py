@@ -58,6 +58,7 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 			writer = csv.DictWriter(outfile, delimiter=',', fieldnames=fieldnames)
 			writer.writeheader()
 
+			frameCount = 0
 			for row in reader:
 				if None in row: #none is a key
 					row["body_idxs"] = row[None]
@@ -67,7 +68,6 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 				if t > totalEndMSec:
 					break
 
-				oldT = t
 				counter = 0
 				fail = False
 				# for fps alignment, use fps as t value incrementer instead of single_body_idx file timings
@@ -81,11 +81,6 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 				if fail:
 					continue
 
-				if fps:
-					print repr(abs(oldT - t))
-					if abs(oldT - t) > (1000 / fps): #if this row has already been accounted for and should be skipped based on fps skip interval
-						continue
-
 				if counter != 0:
 					pass
 					#print counter
@@ -94,7 +89,19 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 					if timeIDMap[t] != personID:
 						continue
 
+				if fps:
+					t += (1000 / fps) / fps * frameCount
+
+				frameCount += 1
+				if frameCount == fps:
+					frameCount = 0
+
 				rowTime = (t - startTime)
+
+				if (rowTime < 0):
+					startTime += (t - startTime)
+					rosTime = 0
+
 				row["time"] = rowTime
 				row["absTime"] = t
 
