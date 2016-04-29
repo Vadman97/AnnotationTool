@@ -264,6 +264,7 @@ def processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, 
 def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations, nV):
 	startTime = 0
 
+	#cleans up the data in logSingleKinectBodyIdxInfo_x.csv to be interpretable
 	fi = open(absPath + "logSingleKinectBodyIdxInfo_" + ts + ".csv", 'rb')
 	data = fi.read()
 	fi.close()
@@ -279,6 +280,7 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 		startTime = int(row1["time"])
 		#print str(startTime)
 
+	# what does this do?
 	processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, noVideo = nV)
 
 	csvList = [
@@ -306,6 +308,7 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 	return "Success!"
 
 def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", annotations = False, nV = False):
+	#currently defaults to looking in RoboticsOpenHouse2016Data folder
 	if len(dataSet) == 0:
 		dataSet = "RoboticsOpenHouse2016Data"
 	if len(expTime) == 0:
@@ -349,6 +352,7 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", a
 		if startSec == endSec:
 			endSec += 1
 
+	#ABS_PATH_TO_DATA is manually defined
 	absPath = ABS_PATH_TO_DATA + dataSet + '/' + expTime + '/'
 
 	if os.path.exists(ABS_PATH_TO_DATA + dataSet):
@@ -377,6 +381,8 @@ if __name__ == "__main__":
 	expTime = raw_input("Enter an experiment timestamp (eg: 4-14-2016_14-24-38): ")
 	fps = raw_input("Enter output video fps: ")
 	eaf = raw_input("Enter a .eaf file for generation or press ENTER for manual entry: ")
+
+	#will auto-parse an eaf file if it is provided.
 	if (len(eaf) == 0):
 		startTime = raw_input("Enter the data start time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:30) or in miliseconds:
 		endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
