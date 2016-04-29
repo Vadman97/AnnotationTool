@@ -195,31 +195,26 @@ def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime
 		with open(folderName + "/labels.csv", 'rb') as csvFile:
 			reader = csv.DictReader(csvFile, delimiter=',')
 			for row in reader:
-				t = row["time"]
+				t = int(row["time"])
 				row.pop("time")
 				labelsDict[t] = row
 			csvFile.close()
-
-	# print labelsDict
+		os.remove(folderName + "/labels.csv")
 
 	labelData = parse_eaf.getActionList(aPathComplete)
 	result = copy.deepcopy(labelsDict)
-	result = collections.OrderedDict(sorted(result.items()))
 
-	for time, row in labelsDict.iteritems():
+	for time in sorted(labelsDict):
+		row = labelsDict[time]
 		for action, instances in labelData.iteritems():
 			if action in row:
 				for inst in instances:
-					start = inst[0]
-					end = inst[1]
-					if time >= start and time <= end:
+					start = int(inst[0])
+					end = int(inst[1])
+					if int(time) >= start and time <= end:
 						result[time][action] = 1
-					else:
+					elif int(result[time][action]) != 1:
 						result[time][action] = 0
-				# del labelData[action]
-
-	print result
-	# TODO doesnt have the right 1/0 values for when the time is actually labeled
 
 	with open(folderName + "/labels.csv", 'wb') as csvFile:
 		print "WRITING"
@@ -229,7 +224,8 @@ def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime
 		writer = csv.DictWriter(csvFile, delimiter=',', fieldnames=fnames)
 		writer.writeheader()
 
-		for time, row in result.iteritems():
+		for time in sorted(result):
+			row = result[time]
 			r = dict()
 			r["time"] = time
 			r.update(row)
@@ -245,13 +241,13 @@ def processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, 
     	# print jsonData
 
     	labels = ["kicking", "hitting prep", "pointing", "shoving prep", "punching prep", "laughing", "teasing", "aggressive", "inappropriate", 
-    	"single", "multiple", "showing fist", "awkward switch", "hitting", "punching", "false positive", "tongue?", "clip", "look over again"] #TODO AUTOMATICALLY GET THESE ALL
+    	"single", "multiple", "showing fist", "awkward switch", "hitting", "punching", "false positive", "tongue?", "clip", "look over again", "backhand hitting"] #TODO AUTOMATICALLY GET THESE ALL
     	labelsDict = dict()
     	for time in timeIDMap:
     		labelsDict[time] = dict()
     		for label in labels:
-    			labelsDict[time][label] = "N/A"
-
+    			labelsDict[time][label] = -1
+    		
     	for file in os.listdir(aPath):
     		# print file
 			if ".eaf" in file:
@@ -388,7 +384,7 @@ if __name__ == "__main__":
 		endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
 		processAnnotations = raw_input("Process annotations? (t,f): ")
 		anno = True if processAnnotations == "t" or processAnnotations == "T" else False
-		print str(parseInputs(dataSet, expTime, startTime, endTime, fps = fps, annotations = anno, nV = True))
+		print str(parseInputs(dataSet, expTime, startTime, endTime, fps = fps, annotations = anno, nV = True)) # TODO nV = False
 	else:
 		res = parse_eaf.getActionList(eaf)
 		for action, instances in res.iteritems():
