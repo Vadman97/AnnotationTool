@@ -62,7 +62,8 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 			writer.writeheader()
 
 			frameCount = 0
-			for row in reader:
+			#TODO if we are running fps mode with fps greater than the real data rate, we should read the rows of interest into memory into a dictionary and go from there
+			for row in reader: #TODO this wont work for fps ts < real data ts because we have to be able to get the same row of data multiple times for different times
 				if None in row: #none is a key
 					row["body_idxs"] = row[None]
 					del row[None]
@@ -70,6 +71,9 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 				t = float(row['time'])
 				if t > totalEndMSec:
 					break
+
+				if fps:
+					t += math.floor((1000. / float(fps)) / fps * frameCount)
 
 				counter = 0
 				fail = False
@@ -91,9 +95,6 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 				if personID != -1:
 					if timeIDMap[t] != personID:
 						continue
-
-				if fps:
-					t += (1000 / fps) / fps * frameCount
 
 				frameCount += 1
 				if frameCount == fps:
@@ -142,7 +143,7 @@ def createTimingDict(absPath, totalStartMSec, totalEndMSec, ts, fps):
 		for row in reader:
 			if fps == False:
 				time = int(row["time"])
-			else:
+			else: #TODO we need to do different stuff for fps because currently timing is completely different from boxyidx csv file
 				if row["time"] < time:
 					continue
 
@@ -240,8 +241,10 @@ def processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, 
 		# JSON format --> name of file: [start time ms, end time ms]
     	# print jsonData
 
-    	labels = ["kicking", "hitting prep", "pointing", "shoving prep", "punching prep", "laughing", "teasing", "aggressive", "inappropriate", 
-    	"single", "multiple", "showing fist", "awkward switch", "hitting", "punching", "false positive", "tongue?", "clip", "look over again", "backhand hitting"] #TODO AUTOMATICALLY GET THESE ALL
+    	labels = parse_eaf.getTierNames(aPath + "1.eaf") #ASSUMING THAT FIRST EAF FILE HAS ALL OF THE LABELS
+    	print repr(labels)
+    	#["kicking", "hitting prep", "pointing", "shoving prep", "punching prep", "laughing", "teasing", "aggressive", "inappropriate", 
+    	#"single", "multiple", "showing fist", "awkward switch", "hitting", "punching", "false positive", "tongue?", "clip", "look over again", "backhand hitting"] #TODO AUTOMATICALLY GET THESE ALL
     	labelsDict = dict()
     	for time in timeIDMap:
     		labelsDict[time] = dict()
@@ -276,7 +279,7 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 		startTime = int(row1["time"])
 		#print str(startTime)
 
-	# what does this do?
+	# process the video (copy frames and generate video), only when nV is set to False
 	processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, noVideo = nV)
 
 	csvList = [
@@ -287,19 +290,23 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 
 	totalStartMSec = (startMin * 60 + startSec) * 1000
 	totalEndMSec = (endMin * 60 + endSec) * 1000
+	#convert timing to MS
 
-	timeIDMap = createTimingDict(absPath, totalStartMSec, totalEndMSec, ts, fps)
+	timeIDMap = createTimingDict(absPath, totalStartMSec, totalEndMSec, ts, fps) #generate dictionary of timings that all csvs will follow (also has current body indx for any time)
+	# print repr(sorted(timeIDMap))
 
-	# processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap)
-	# TODO UNCOMMENT ^
+	processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap)
+	#for each csv, process the data and output it based on the timeIDMap
 
 	#folder multiplePeopleDeidentifiedImageData
 	#processKinectHDFaces("DrawingPointsKinectHDFace", )
 	#folder singlePersonDeidentifiedImageData
-	dataList = ["DrawingPointsCLMEyeGaze", "DrawingPointsCLMEyes", "DrawingPointsCLMFace", "DrawingPointsKinectHDFace"]
+	dataList = ["DrawingPointsCLMEyeGaze", "DrawingPointsCLMEyes", "DrawingPointsCLMFace", "DrawingPointsKinectHDFace"] # TODO do we process this or is it redundant?
 	#processSinglePersonData(dataList)
 	if annotations:
 		processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, timeIDMap)
+		#process the annotations to create our labels.csv file
+		#uses annotations folder in data directory for annotations (map.json stores .eaf file names mapping to the timing the file is in the entire data set)
 
 	return "Success!"
 
@@ -379,12 +386,12 @@ if __name__ == "__main__":
 	eaf = raw_input("Enter a .eaf file for generation or press ENTER for manual entry: ")
 
 	#will auto-parse an eaf file if it is provided.
-	if (len(eaf) == 0):
+	if (len(eaf) == 0): #no file
 		startTime = raw_input("Enter the data start time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:30) or in miliseconds:
 		endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
 		processAnnotations = raw_input("Process annotations? (t,f): ")
 		anno = True if processAnnotations == "t" or processAnnotations == "T" else False
-		print str(parseInputs(dataSet, expTime, startTime, endTime, fps = fps, annotations = anno, nV = True)) # TODO nV = False
+		print str(parseInputs(dataSet, expTime, startTime, endTime, fps = fps, annotations = anno, nV = True))
 	else:
 		res = parse_eaf.getActionList(eaf)
 		for action, instances in res.iteritems():

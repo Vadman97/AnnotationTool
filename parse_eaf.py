@@ -6,6 +6,14 @@ import pympi    # Import pympi to work with elan files
 import string   # Import string to get the punctuation data
 import subprocess
 
+def getTierNames(eafFile):
+    res = list()
+    for file_path in glob.glob(str(eafFile)):
+        # Initialize the elan file
+        eafob = pympi.Elan.Eaf(file_path)
+        res.extend(eafob.get_tier_names())
+    return res
+
 def getActionList(eafFile):
     res = dict()
     for file_path in glob.glob(str(eafFile)):
