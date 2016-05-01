@@ -8,6 +8,7 @@ import math
 import parse_eaf
 import json
 import collections
+import sys
 #from multiprocessing import Process, Manager
 from joblib import Parallel, delayed
 
@@ -42,6 +43,23 @@ def processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fp
 	#subprocess.call(["ffmpeg", "-framerate", "30", '-i', folderName+'/frames/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', folderName+'/out.mp4'])
 	proc = subprocess.Popen(["ffmpeg", "-framerate", "30", '-i', folderName+'/frames/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', '-n', folderName+'/out.mp4'], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True)
 
+
+def writeRow(timeIDMap, curTime, previousRow, writer, personID):
+	prevTime = float(previousRow['time'])
+ 	timeCounter = prevTime
+ 	while timeCounter < curTime:
+ 		#print "timeCounter " + repr(timeCounter) + " in range " + repr(prevTime) + " to " + repr(t)
+ 		if timeCounter in timeIDMap:
+ 			#print timeCounter
+			if personID != -1:
+ 				if timeIDMap[timeCounter] == personID:
+ 					rowToWrite = previousRow
+ 					rowToWrite["absTime"] = timeCounter
+ 					writer.writerow(rowToWrite)
+
+ 			break
+ 		timeCounter += 1
+
 def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime, personID = -1, fps = False):
 	fi = open(inFile, 'rb')
 	data = fi.read()
@@ -62,54 +80,84 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 			writer.writeheader()
 
 			frameCount = 0
+			previousRow = dict()
+			rowToWrite = dict()
 			#TODO if we are running fps mode with fps greater than the real data rate, we should read the rows of interest into memory into a dictionary and go from there
+
+			firstRowToCheck = True
+
 			for row in reader: #TODO this wont work for fps ts < real data ts because we have to be able to get the same row of data multiple times for different times
 				if None in row: #none is a key
 					row["body_idxs"] = row[None]
 					del row[None]
 				# print repr(row)
 				t = float(row['time'])
-				if t > totalEndMSec:
-					break
-
-				if fps:
-					t += math.floor((1000. / float(fps)) / fps * frameCount)
-
-				counter = 0
-				fail = False
-				# for fps alignment, use fps as t value incrementer instead of single_body_idx file timings
-				while t not in timeIDMap: #used to match up row times with master times
-					# print repr(t)
-					t -= 1
-					if t < totalStartMSec:
-						fail = True
-						break
-					counter += 1
-				if fail:
+				if t < totalStartMSec:
 					continue
+				if t > totalEndMSec:
+				 	break
+				#print t
 
-				if counter != 0:
-					pass
-					#print counter
 
-				if personID != -1:
-					if timeIDMap[t] != personID:
-						continue
+				# print "hello, time " + repr(t)
 
-				frameCount += 1
-				if frameCount == fps:
-					frameCount = 0
+				if (firstRowToCheck):
+				 	firstRowToCheck = False
+				else:
+					writeRow(timeIDMap, t, previousRow, writer, personID)
+				previousRow = row
+			writeRow(timeIDMap, t, previousRow, writer, personID)
 
-				rowTime = (t - startTime)
+				# write the row to corresponding csv file with adjusted timestamp <-- or some common counter
 
-				if (rowTime < 0):
-					startTime += (t - startTime)
-					rosTime = 0
 
-				row["time"] = rowTime
-				row["absTime"] = t
+			# for row in reader: #TODO this wont work for fps ts < real data ts because we have to be able to get the same row of data multiple times for different times
+			# 	if None in row: #none is a key
+			# 		row["body_idxs"] = row[None]
+			# 		del row[None]
+			# 	# print repr(row)
+			# 	t = float(row['time'])
+			# 	if t > totalEndMSec:
+			# 		break
 
-				writer.writerow(row)
+			# 	if fps:
+			# 		t += math.floor((1000. / float(fps)) / fps * frameCount)
+
+			# 	counter = 0
+			# 	fail = False
+			# 	# for fps alignment, use fps as t value incrementer instead of single_body_idx file timings
+			# 	while t not in timeIDMap: #used to match up row times with master times
+			# 		# print repr(t)
+			# 		t -= 1
+			# 		if t < totalStartMSec:
+			# 			fail = True
+			# 			break
+			# 		counter += 1
+			# 	if fail:
+			# 		continue
+
+			# 	if counter != 0:
+			# 		pass
+			# 		#print counter
+
+			# 	if personID != -1:
+			# 		if timeIDMap[t] != personID:
+			# 			continue
+
+			# 	frameCount += 1
+			# 	if frameCount == fps:
+			# 		frameCount = 0
+
+			# 	rowTime = (t - startTime)
+
+			# 	if (rowTime < 0):
+			# 		startTime += (t - startTime)
+			# 		rosTime = 0
+
+			# 	row["time"] = rowTime
+			# 	row["absTime"] = t
+
+			# 	writer.writerow(row)
 				# write the row to corresponding csv file with adjusted timestamp <-- or some common counter
 		outfile.close()
 	csvfile.close()
@@ -135,34 +183,42 @@ def processCSVHelper2(file, name, name2, timeIDMap, absPath, folderName, totalSt
 		writeCSV(timeIDMap, absPath + file, folderName + '/' + file, totalStartMSec, totalEndMSec, startTime, fps = fps)
 
 def createTimingDict(absPath, totalStartMSec, totalEndMSec, ts, fps):
-	timeIDMap = dict()
+	timeIDMap = dict()#collections.OrderedDict()
 	time = totalStartMSec
+	setFirstFpsTime = True;
+	previousRow = dict()
 	with open(absPath + "logSingleKinectBodyIdxInfo_" + ts + ".csv", "rb") as csvfile:
 		reader = csv.DictReader(csvfile, delimiter=',')
-
 		for row in reader:
-			if fps == False:
-				time = int(row["time"])
-			else: #TODO we need to do different stuff for fps because currently timing is completely different from boxyidx csv file
-				if row["time"] < time:
-					continue
+			time = int(row["time"])
 
 			if time < totalStartMSec:
 				continue
 			if time > totalEndMSec:
 				break
 
-			if row["body_idxs"] is None:
-				continue
-			if '|' not in row["body_idxs"]:
-				continue
+			#makes sure that bidx has proper value
+			if (row["body_idxs"] is None) or ('|' not in row["body_idxs"]):
+				bidx = -1
+			else:
+				bidx = int(row["body_idxs"].split('|')[1])
 
-			bidx = int(row["body_idxs"].split('|')[1])
-			timeIDMap.update({time: bidx})
+			if fps == False:
+				timeIDMap.update({time: bidx})
+			else:
+				#if fps != False, set the timing in the map according to fpsTime
+				if (setFirstFpsTime):
+					fpsTime = time
+					setFirstFpsTime = False;
+				else:
+					while(fpsTime < time):
+						timeIDMap.update({fpsTime: previousRow["body_idx"]})
+						fpsTime += 1000/fps
 
-			if fps:
-				time += 1000 / fps
-
+			previousRow["body_idx"] = bidx
+			previousRow["time"] = time
+		if fps:
+			timeIDMap.update({fpsTime: previousRow["body_idx"]})
 	return timeIDMap
 
 def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap):
