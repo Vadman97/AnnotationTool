@@ -82,83 +82,23 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 			frameCount = 0
 			previousRow = dict()
 			rowToWrite = dict()
-			#TODO if we are running fps mode with fps greater than the real data rate, we should read the rows of interest into memory into a dictionary and go from there
-
 			firstRowToCheck = True
 
-			for row in reader: #TODO this wont work for fps ts < real data ts because we have to be able to get the same row of data multiple times for different times
-				if None in row: #none is a key
+			for row in reader: 
+				if None in row:
 					row["body_idxs"] = row[None]
 					del row[None]
-				# print repr(row)
 				t = float(row['time'])
 				if t < totalStartMSec:
 					continue
 				if t > totalEndMSec:
 				 	break
-				#print t
-
-
-				# print "hello, time " + repr(t)
-
 				if (firstRowToCheck):
 				 	firstRowToCheck = False
 				else:
 					writeRow(timeIDMap, t, previousRow, writer, personID)
 				previousRow = row
 			writeRow(timeIDMap, t, previousRow, writer, personID)
-
-				# write the row to corresponding csv file with adjusted timestamp <-- or some common counter
-
-
-			# for row in reader: #TODO this wont work for fps ts < real data ts because we have to be able to get the same row of data multiple times for different times
-			# 	if None in row: #none is a key
-			# 		row["body_idxs"] = row[None]
-			# 		del row[None]
-			# 	# print repr(row)
-			# 	t = float(row['time'])
-			# 	if t > totalEndMSec:
-			# 		break
-
-			# 	if fps:
-			# 		t += math.floor((1000. / float(fps)) / fps * frameCount)
-
-			# 	counter = 0
-			# 	fail = False
-			# 	# for fps alignment, use fps as t value incrementer instead of single_body_idx file timings
-			# 	while t not in timeIDMap: #used to match up row times with master times
-			# 		# print repr(t)
-			# 		t -= 1
-			# 		if t < totalStartMSec:
-			# 			fail = True
-			# 			break
-			# 		counter += 1
-			# 	if fail:
-			# 		continue
-
-			# 	if counter != 0:
-			# 		pass
-			# 		#print counter
-
-			# 	if personID != -1:
-			# 		if timeIDMap[t] != personID:
-			# 			continue
-
-			# 	frameCount += 1
-			# 	if frameCount == fps:
-			# 		frameCount = 0
-
-			# 	rowTime = (t - startTime)
-
-			# 	if (rowTime < 0):
-			# 		startTime += (t - startTime)
-			# 		rosTime = 0
-
-			# 	row["time"] = rowTime
-			# 	row["absTime"] = t
-
-			# 	writer.writerow(row)
-				# write the row to corresponding csv file with adjusted timestamp <-- or some common counter
 		outfile.close()
 	csvfile.close()
 
