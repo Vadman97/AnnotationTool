@@ -5,7 +5,7 @@ import glob
 import copy
 import subprocess
 import math
-import parse_eaf
+import process_eaf
 import json
 import collections
 import sys
@@ -48,8 +48,9 @@ def processVideo(absPath, ts, totalStartMSec, totalEndMSec, fps, videoCounter = 
 		idx += 1
 
 	#subprocess.call(["ffmpeg", "-framerate", "30", '-i', folderName+'/frames/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', folderName+'/out.mp4'])
-	proc = subprocess.Popen(["ffmpeg", "-framerate", "30", '-i', aPath +'/frames'+str(videoCounter)+'/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', '-n', aPath+'/'+ str(videoCounter)+'.mp4'], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True)
-
+	#proc = subprocess.Popen(["ffmpeg", "-framerate", "30", '-i', aPath +'/frames'+str(videoCounter)+'/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', '-n', aPath+'/'+ str(videoCounter)+'.mp4'], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True)
+	proc = subprocess.call(["ffmpeg", "-framerate", "30", '-i', aPath +'/frames'+str(videoCounter)+'/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', '-n', aPath+'/'+ str(videoCounter)+'.mp4'], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True)
+	process_eaf.writeEaf(str(videoCounter), aPath)
 
 def writeRow(timeIDMap, curTime, previousRow, writer, personID):
 	prevTime = float(previousRow['time'])
@@ -195,6 +196,7 @@ def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec,
 	# 			#Simple file, just copy the range we want of the whole file no body idx mapping needed
 
 def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime, labelsDict):
+	# not sure if recreating the labels.csv file everytime (is that what you are doing?) is the best option, but as long as it works fine...
 	if (os.path.isfile(folderName + "/labels.csv")):
 		with open(folderName + "/labels.csv", 'rb') as csvFile:
 			reader = csv.DictReader(csvFile, delimiter=',')
@@ -205,7 +207,7 @@ def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime
 			csvFile.close()
 		os.remove(folderName + "/labels.csv")
 
-	labelData = parse_eaf.getActionList(aPathComplete)
+	labelData = process_eaf.getActionList(aPathComplete)
 	result = copy.deepcopy(labelsDict)
 
 	for time in sorted(labelsDict):
@@ -244,7 +246,7 @@ def processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, 
 		# JSON format --> name of file: [start time ms, end time ms]
     	# print jsonData
 
-    	labels = parse_eaf.getTierNames(aPath + "1.eaf") #ASSUMING THAT FIRST EAF FILE HAS ALL OF THE LABELS
+    	labels = process_eaf.getTierNames(aPath + "1.eaf") #ASSUMING THAT FIRST EAF FILE HAS ALL OF THE LABELS
     	print repr(labels)
     	#["kicking", "hitting prep", "pointing", "shoving prep", "punching prep", "laughing", "teasing", "aggressive", "inappropriate", 
     	#"single", "multiple", "showing fist", "awkward switch", "hitting", "punching", "false positive", "tongue?", "clip", "look over again", "backhand hitting"] #TODO AUTOMATICALLY GET THESE ALL
@@ -414,7 +416,7 @@ if __name__ == "__main__":
 		eaf = raw_input("Enter a .eaf file that specifies clip regions of interest: ")
 		if len(eaf) == 0:
 			eaf = "4-14-2016_9-5-46.eaf"
-		res = parse_eaf.getActionList(eaf)
+		res = process_eaf.getActionList(eaf)
 		vmap = collections.OrderedDict()
 		for action, instances in res.iteritems():
 			a = str(action)

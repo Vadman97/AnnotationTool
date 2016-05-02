@@ -6,6 +6,14 @@ import pympi    # Import pympi to work with elan files
 import string   # Import string to get the punctuation data
 import subprocess
 
+def writeEaf(filename, filepath):
+    eafob = pympi.Elan.Eaf()
+    #print filepath + filename + '.mp4'
+    eafob.add_linked_file(filepath + filename + '.mp4', mimetype = "mp4")
+    eafob.remove_tier('default')
+    #eafob.add_tier('punching')
+    pympi.Elan.to_eaf(filepath + filename + '.eaf', eafob, pretty=True)
+
 def getTierNames(eafFile):
     res = list()
     for file_path in glob.glob(str(eafFile)):

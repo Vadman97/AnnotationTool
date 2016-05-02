@@ -9,7 +9,7 @@ Take preexisiting JSON file with information about where video clip durations ar
 
 TODO List:
 
-1. Mode 1: Auto setup eaf flies for annotators
+1. Mode 1: (basically done - just need to auto-add tiers) auto setup eaf flies for annotators
 
 2. Mode 1: Move master eaf file to somewhere else
 
