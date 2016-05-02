@@ -14,13 +14,13 @@ from joblib import Parallel, delayed
 
 ABS_PATH_TO_DATA = "../Data/"
 
-def processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, noVideo = False):
+
+def processVideo(absPath, ts, totalStartMSec, totalEndMSec, fps, videoCounter = 0, noVideo = False):
 	if noVideo:
 		return
-	totalStartSec = startMin * 60 + startSec
-	totalEndSec = endMin * 60 + endSec
-	frameStart = totalStartSec * 30;
-	frameEnd = totalEndSec * 30;
+
+	frameStart = int(round((totalStartMSec / 1000.0) * 30))
+	frameEnd = int(round((totalEndMSec / 1000.0) * 30))
 
 	frames = list()
 
@@ -32,16 +32,23 @@ def processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fp
 
 	frames.sort()
 
-	if not os.path.exists(folderName + '/frames'):
-		os.makedirs(folderName + '/frames')
+	# if not os.path.exists(folderName + '/frames'):
+	# 	os.makedirs(folderName + '/frames')
+	aPath = absPath + "annotation/"
+
+	if not os.path.exists(aPath):
+	 	os.makedirs(aPath)
+
+	if not os.path.exists(aPath + '/frames' + str(videoCounter)):
+	 	os.makedirs(aPath + '/frames' + str(videoCounter))
 
 	idx = 1
 	for frame in frames:
-		shutil.copyfile(absPath + "testOutput_" + ts + '/frame' + str(frame) + '.png', folderName + '/frames/frame' + str(idx) + '.png')
+		shutil.copyfile(absPath + "testOutput_" + ts + '/frame' + str(frame) + '.png', aPath + '/frames' + str(videoCounter) + '/frame' + str(idx) + '.png')
 		idx += 1
 
 	#subprocess.call(["ffmpeg", "-framerate", "30", '-i', folderName+'/frames/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', folderName+'/out.mp4'])
-	proc = subprocess.Popen(["ffmpeg", "-framerate", "30", '-i', folderName+'/frames/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', '-n', folderName+'/out.mp4'], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True)
+	proc = subprocess.Popen(["ffmpeg", "-framerate", "30", '-i', aPath +'/frames'+str(videoCounter)+'/frame%d.png', '-c:v', 'libx264', '-r', '30', '-pix_fmt', 'yuv420p', '-n', aPath+'/'+ str(videoCounter)+'.mp4'], shell=True, stdin=None, stdout=None, stderr=None, close_fds=True)
 
 
 def writeRow(timeIDMap, curTime, previousRow, writer, personID):
@@ -256,7 +263,7 @@ def processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, 
 					eTime = jsonData[f][1]
 					createAnnotation(startTime, folderName, absPath, aPath + file, sTime, eTime, labelsDict)
 
-def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations, nV):
+def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, fps, counter, features, annotations, nV):
 	startTime = 0
 
 	#cleans up the data in logSingleKinectBodyIdxInfo_x.csv to be interpretable
@@ -276,7 +283,8 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 		#print str(startTime)
 
 	# process the video (copy frames and generate video), only when nV is set to False
-	processVideo(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, noVideo = nV)
+	processVideo(absPath, ts, totalStartMSec, totalEndMSec, fps, videoCounter = counter, noVideo = nV)
+
 
 	csvList = [
 		"CLMHeads", "KinectBeamAudio", "KinectBodies", "KinectFaces", "KinectHDFacePointsCameraSpace",
@@ -284,14 +292,15 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 	]
 
 
-	totalStartMSec = (startMin * 60 + startSec) * 1000
-	totalEndMSec = (endMin * 60 + endSec) * 1000
+	# converting to min and sec loses information... then values are coverted back to milliseconds... why?
+	# totalStartMSec = (startMin * 60 + startSec) * 1000
+	# totalEndMSec = (endMin * 60 + endSec) * 1000
 	#convert timing to MS
 
 	timeIDMap = createTimingDict(absPath, totalStartMSec, totalEndMSec, ts, fps) #generate dictionary of timings that all csvs will follow (also has current body indx for any time)
 	# print repr(sorted(timeIDMap))
-
-	processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap)
+	if features:
+		processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap)
 	#for each csv, process the data and output it based on the timeIDMap
 
 	#folder multiplePeopleDeidentifiedImageData
@@ -306,14 +315,14 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, an
 
 	return "Success!"
 
-def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", annotations = False, nV = False):
+def parseInputs(dataSet, expTime, startTime, endTime, mode, fps = "", inFolder = "", counter = 0, features = False, annotations = False, nV = False):
 	#currently defaults to looking in RoboticsOpenHouse2016Data folder
-	if len(dataSet) == 0:
-		dataSet = "RoboticsOpenHouse2016Data"
-	if len(expTime) == 0:
-		expTime = "DataCollection_4-14-2016_9-5-46"
-	else:
-		expTime = "DataCollection_" + expTime
+	# if len(dataSet) == 0:
+	# 	dataSet = "RoboticsOpenHouse2016Data"
+	# if len(expTime) == 0:
+	# 	expTime = "DataCollection_4-14-2016_9-5-46"
+	# else:
+	# 	expTime = "DataCollection_" + expTime
 
 	if len(startTime) == 0:
 		startTime = "0:0"
@@ -326,8 +335,11 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", a
 
 	ts = expTime.split('DataCollection_')[1]
 
+	totalStartMSec = float(startTime)
+	totalEndMSec = float(endTime)
+
 	if len(startTime.split(':')) == 1:
-		sec = float(startTime) / 1000.
+		sec = totalStartMSec / 1000.
 		startSec = math.floor(sec) % 60
 		startMin = math.floor(sec / 60.)
 	else:
@@ -335,7 +347,7 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", a
 		startSec = startTime.split(':')[1]
 
 	if len(endTime.split(':')) == 1:
-		esec = float(endTime) / 1000.
+		esec = totalEndMSec / 1000.
 		endSec = math.floor(esec) % 60
 		endMin = math.floor(esec / 60.)
 	else:
@@ -365,10 +377,9 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", a
 			folderName = ABS_PATH_TO_DATA + prefix + "experiment_clip_" + dataSet + "_" + ts + "_" + str(startMin) + "." + str(startSec) + "-" + str(endMin) + "." + str(endSec)
 
 			print "Output will be generated in folder: " + folderName
-
-			if not os.path.exists(folderName):
+			if (mode == 1) and (not os.path.exists(folderName)):
 				os.makedirs(folderName)
-			return process(folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, annotations, nV)
+			return process(folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, fps, counter, features, annotations, nV)
 			#else:
 			#	return "Error! Folder already exists for this clip"
 
@@ -378,24 +389,46 @@ def parseInputs(dataSet, expTime, startTime, endTime, fps = "", inFolder = "", a
 if __name__ == "__main__":
 	dataSet = raw_input("Enter a data set folder name: ")
 	expTime = raw_input("Enter an experiment timestamp (eg: 4-14-2016_14-24-38): ")
-	fps = raw_input("Enter output video fps: ")
-	eaf = raw_input("Enter a .eaf file for generation or press ENTER for manual entry: ")
+	mode = int(raw_input("Specify which mode: 1 or 2: "))
+
+	if len(dataSet) == 0:
+		dataSet = "RoboticsOpenHouse2016Data"
+	if len(expTime) == 0:
+		expTime = "DataCollection_4-14-2016_9-5-46"
+	else:
+		expTime = "DataCollection_" + expTime
+		
+	#eaf = raw_input("Enter a .eaf file for generation or press ENTER for manual entry: ")
 
 	#will auto-parse an eaf file if it is provided.
-	if (len(eaf) == 0): #no file
+	#if (len(eaf) == 0): #MODE 1, no file
+	if mode == 1:
+		fps = raw_input("Enter output video fps: ")
 		startTime = raw_input("Enter the data start time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:30) or in miliseconds:
 		endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
-		processAnnotations = raw_input("Process annotations? (t,f): ")
+		processAnnotations = raw_input("Process annotations? (t,f): ") # requires an annotations subfolder in the data folder
 		anno = True if processAnnotations == "t" or processAnnotations == "T" else False
-		print str(parseInputs(dataSet, expTime, startTime, endTime, fps = fps, annotations = anno, nV = True))
-	else:
+		print str(parseInputs(dataSet, expTime, startTime, endTime, mode, fps = fps, features = True, annotations = anno, nV = True))
+
+	elif mode == 2:
+		eaf = raw_input("Enter a .eaf file that specifies clip regions of interest: ")
+		if len(eaf) == 0:
+			eaf = "4-14-2016_9-5-46.eaf"
 		res = parse_eaf.getActionList(eaf)
+		vmap = collections.OrderedDict()
 		for action, instances in res.iteritems():
 			a = str(action)
 			a = a.replace(' ', '_')
 			a = a.replace('?', '_maybe')
-			for timeTuple in instances:
-				startTime = str(timeTuple[0])
-				endTime = str(timeTuple[1])
-				print "S: " + startTime + " E: " + endTime
-				print str(parseInputs(dataSet, expTime, startTime, endTime, inFolder=a, fps = fps))
+			if a == "clip":
+				print "Action: " + action
+				for i, timeTuple in enumerate(instances):
+					startTime = str(timeTuple[0])
+					endTime = str(timeTuple[1])
+					vmap[str(i+1)] = [int(startTime), int(endTime)]
+					print "S: " + startTime + " E: " + endTime
+					print str(parseInputs(dataSet, expTime, startTime, endTime, mode, counter = i+1))
+		
+		aPath = ABS_PATH_TO_DATA + dataSet + '/' + expTime + '/annotation/'
+		with open(aPath + 'map.json', 'w') as outfile:
+			json.dump(vmap, outfile)
