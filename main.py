@@ -377,7 +377,7 @@ def parseInputs(dataSet, expTime, startTime, endTime, mode, fps = "", inFolder =
 			folderName = ABS_PATH_TO_DATA + prefix + "experiment_clip_" + dataSet + "_" + ts + "_" + str(startMin) + "." + str(startSec) + "-" + str(endMin) + "." + str(endSec)
 
 			print "Output will be generated in folder: " + folderName
-			if (mode == 1) and (not os.path.exists(folderName)):
+			if (mode == 2) and (not os.path.exists(folderName)):
 				os.makedirs(folderName)
 			return process(folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, fps, counter, features, annotations, nV)
 			#else:
@@ -397,12 +397,12 @@ if __name__ == "__main__":
 		expTime = "DataCollection_4-14-2016_9-5-46"
 	else:
 		expTime = "DataCollection_" + expTime
-		
+
 	#eaf = raw_input("Enter a .eaf file for generation or press ENTER for manual entry: ")
 
 	#will auto-parse an eaf file if it is provided.
 	#if (len(eaf) == 0): #MODE 1, no file
-	if mode == 1:
+	if mode == 2:
 		fps = raw_input("Enter output video fps: ")
 		startTime = raw_input("Enter the data start time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:30) or in miliseconds:
 		endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
@@ -410,7 +410,7 @@ if __name__ == "__main__":
 		anno = True if processAnnotations == "t" or processAnnotations == "T" else False
 		print str(parseInputs(dataSet, expTime, startTime, endTime, mode, fps = fps, features = True, annotations = anno, nV = True))
 
-	elif mode == 2:
+	elif mode == 1:
 		eaf = raw_input("Enter a .eaf file that specifies clip regions of interest: ")
 		if len(eaf) == 0:
 			eaf = "4-14-2016_9-5-46.eaf"
