@@ -11,7 +11,13 @@ def writeEaf(filename, filepath):
     #print filepath + filename + '.mp4'
     eafob.add_linked_file(filepath + filename + '.mp4', mimetype = "mp4")
     eafob.remove_tier('default')
-    #eafob.add_tier('punching')
+    eafob.add_tier('punching')
+    eafob.add_tier('kicking')
+    eafob.add_tier('hitting')
+    eafob.add_tier('shoving')
+    eafob.add_tier('showing fist')
+    eafob.add_tier('pointing')
+    eafob.add_tier('tongue')
     pympi.Elan.to_eaf(filepath + filename + '.eaf', eafob, pretty=True)
 
 def getTierNames(eafFile):

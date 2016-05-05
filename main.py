@@ -208,6 +208,7 @@ def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime
 		os.remove(folderName + "/labels.csv")
 
 	labelData = process_eaf.getActionList(aPathComplete)
+	#print labelData
 	result = copy.deepcopy(labelsDict)
 
 	for time in sorted(labelsDict):
@@ -217,10 +218,12 @@ def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime
 				for inst in instances:
 					start = int(inst[0])
 					end = int(inst[1])
-					if int(time) >= start and time <= end:
+					if (int(time) >= start + sTime) and (int(time) <= end + sTime): #there's an annotation
 						result[time][action] = 1
-					elif int(result[time][action]) != 1:
-						result[time][action] = 0
+					elif (int(time) >= sTime) and (int(time) <= eTime): #only the video is present
+						result[time][action] = 0						
+					# elif int(result[time][action]) != 1: 
+					# 	result[time][action] = 0
 
 	with open(folderName + "/labels.csv", 'wb') as csvFile:
 		print "WRITING"
@@ -246,7 +249,7 @@ def processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, 
 		# JSON format --> name of file: [start time ms, end time ms]
     	# print jsonData
 
-    	labels = process_eaf.getTierNames(aPath + "1.eaf") #ASSUMING THAT FIRST EAF FILE HAS ALL OF THE LABELS
+    	labels = process_eaf.getTierNames(aPath + "1.eaf") #ASSUMING THAT FIRST EAF FILE HAS ALL OF THE LABELS, Maybe... still need to enforce this
     	print repr(labels)
     	#["kicking", "hitting prep", "pointing", "shoving prep", "punching prep", "laughing", "teasing", "aggressive", "inappropriate", 
     	#"single", "multiple", "showing fist", "awkward switch", "hitting", "punching", "false positive", "tongue?", "clip", "look over again", "backhand hitting"] #TODO AUTOMATICALLY GET THESE ALL
@@ -410,7 +413,7 @@ if __name__ == "__main__":
 		endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
 		processAnnotations = raw_input("Process annotations? (t,f): ") # requires an annotations subfolder in the data folder
 		anno = True if processAnnotations == "t" or processAnnotations == "T" else False
-		print str(parseInputs(dataSet, expTime, startTime, endTime, mode, fps = fps, features = True, annotations = anno, nV = True))
+		print str(parseInputs(dataSet, expTime, startTime, endTime, mode, fps = fps, features = False, annotations = anno, nV = True))
 
 	elif mode == 1:
 		eaf = raw_input("Enter a .eaf file that specifies clip regions of interest: ")
