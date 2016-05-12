@@ -393,47 +393,59 @@ def parseInputs(dataSet, expTime, startTime, endTime, mode, fps = "", inFolder =
 
 if __name__ == "__main__":
 	dataSet = raw_input("Enter a data set folder name: ")
-	expTime = raw_input("Enter an experiment timestamp (eg: 4-14-2016_14-24-38): ")
 	mode = int(raw_input("Specify which mode: 1 or 2: "))
-
 	if len(dataSet) == 0:
 		dataSet = "RoboticsOpenHouse2016Data"
-	if len(expTime) == 0:
-		expTime = "DataCollection_4-14-2016_9-5-46"
-	else:
-		expTime = "DataCollection_" + expTime
+
 
 	#eaf = raw_input("Enter a .eaf file for generation or press ENTER for manual entry: ")
 
 	#will auto-parse an eaf file if it is provided.
 	#if (len(eaf) == 0): #MODE 1, no file
 	if mode == 2:
+		expTimes = [raw_input("Enter an experiment timestamp (eg: 4-14-2016_14-24-38): ")]
+		if len(expTimes[0]) == 0:
+			expTimes = ["4-14-2016_9-50-46","4-14-2016_10-8-52","4-14-2016_10-32-53","4-14-2016_10-41-51","4-14-2016_10-56-10","4-14-2016_11-27-1"]
+
 		fps = raw_input("Enter output video fps: ")
 		startTime = raw_input("Enter the data start time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:30) or in miliseconds:
 		endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
 		processAnnotations = raw_input("Process annotations? (t,f): ") # requires an annotations subfolder in the data folder
 		anno = True if processAnnotations == "t" or processAnnotations == "T" else False
-		print str(parseInputs(dataSet, expTime, startTime, endTime, mode, fps = fps, features = False, annotations = anno, nV = True))
+
+		for expTime in expTimes:
+			expTime = "DataCollection_" + expTime
+			print str(parseInputs(dataSet, expTime, startTime, endTime, mode, fps = fps, features = True, annotations = anno, nV = True))
+
+
+		#things to consider: how to minimize wasted time: 1. start and end time for the actions in each eaf file... -> for extracting data...?
+		#one-> I have list of annotations
+		#two-> I may have overlapping video annotations
+		#the annotations are used to determine which data to pull. What if there are conflicting annotations?? error message, probably a good idea
 
 	elif mode == 1:
-		eaf = raw_input("Enter a .eaf file that specifies clip regions of interest: ")
-		if len(eaf) == 0:
-			eaf = "4-14-2016_9-5-46.eaf"
-		res = process_eaf.getActionList(eaf)
-		vmap = collections.OrderedDict()
-		for action, instances in res.iteritems():
-			a = str(action)
-			a = a.replace(' ', '_')
-			a = a.replace('?', '_maybe')
-			if a == "clip":
-				print "Action: " + action
-				for i, timeTuple in enumerate(instances):
-					startTime = str(timeTuple[0])
-					endTime = str(timeTuple[1])
-					vmap[str(i+1)] = [int(startTime), int(endTime)]
-					print "S: " + startTime + " E: " + endTime
-					print str(parseInputs(dataSet, expTime, startTime, endTime, mode, counter = i+1))
-		
-		aPath = ABS_PATH_TO_DATA + dataSet + '/' + expTime + '/annotation/'
-		with open(aPath + 'map.json', 'w') as outfile:
-			json.dump(vmap, outfile)
+		eafs = [raw_input("Enter a .eaf file that specifies clip regions of interest: ")]
+		if len(eafs[0]) == 0:
+			#eaf = "4-14-2016_9-5-46.eaf"
+			eafs = ["4-14-2016_9-50-46.eaf","4-14-2016_10-8-52.eaf","4-14-2016_10-32-53.eaf","4-14-2016_10-41-51.eaf","4-14-2016_10-56-10.eaf","4-14-2016_11-27-1.eaf"]
+			#eafs = ["4-14-2016_9-30-31.eaf","4-14-2016_9-42-3.eaf","4-14-2016_9-50-46.eaf","4-14-2016_10-8-52.eaf","4-14-2016_10-32-53.eaf","4-14-2016_10-41-51.eaf","4-14-2016_10-56-10.eaf","4-14-2016_11-27-1.eaf"]
+		for eaf in eafs:
+			expTime = "DataCollection_" + eaf[:-4]
+			res = process_eaf.getActionList(eaf)
+			vmap = collections.OrderedDict()
+			for action, instances in res.iteritems():
+				a = str(action)
+				a = a.replace(' ', '_')
+				a = a.replace('?', '_maybe')
+				if a == "clip":
+					print "Action: " + action
+					for i, timeTuple in enumerate(instances):
+						startTime = str(timeTuple[0])
+						endTime = str(timeTuple[1])
+						vmap[str(i+1)] = [int(startTime), int(endTime)]
+						print "S: " + startTime + " E: " + endTime
+						print str(parseInputs(dataSet, expTime, startTime, endTime, mode, counter = i+1))
+			
+			aPath = ABS_PATH_TO_DATA + dataSet + '/' + expTime + '/annotation/'
+			with open(aPath + 'map.json', 'w') as outfile:
+				json.dump(vmap, outfile)
