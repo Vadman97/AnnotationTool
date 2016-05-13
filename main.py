@@ -80,34 +80,41 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 	print inFile
 
 	with open(inFile, 'rb') as csvfile:
-		with open(outFile, 'wb') as outfile:
-			reader = csv.DictReader(csvfile, delimiter=',')
-			fieldnames = copy.deepcopy(reader.fieldnames)
-			fieldnames.insert(0, 'absTime')
+		csvExists = os.path.isfile(outFile)
+		reader = csv.DictReader(csvfile, delimiter=',')
+		fieldnames = copy.deepcopy(reader.fieldnames)
+		fieldnames.insert(0, 'absTime')
+
+		if csvExists: #append, dont writer header again
+			outfile = open(outFile, 'a')
+			writer = csv.DictWriter(outfile, delimiter=',', fieldnames=fieldnames)
+		else:
+			outfile = open(outFile, 'wb') #write csv from start
 			writer = csv.DictWriter(outfile, delimiter=',', fieldnames=fieldnames)
 			writer.writeheader()
 
-			frameCount = 0
-			previousRow = dict()
-			rowToWrite = dict()
-			firstRowToCheck = True
+		frameCount = 0
+		previousRow = dict()
+		rowToWrite = dict()
+		firstRowToCheck = True
 
-			for row in reader: 
-				if None in row:
-					row["body_idxs"] = row[None]
-					del row[None]
-				t = float(row['time'])
-				if t < totalStartMSec:
-					continue
-				if t > totalEndMSec:
-				 	break
-				if (firstRowToCheck):
-				 	firstRowToCheck = False
-				else:
-					writeRow(timeIDMap, t, previousRow, writer, personID)
-				previousRow = row
-			writeRow(timeIDMap, t, previousRow, writer, personID)
-		outfile.close()
+		for row in reader: 
+			if None in row:
+				row["body_idxs"] = row[None]
+				del row[None]
+			t = float(row['time'])
+			if t < totalStartMSec:
+				continue
+			if t > totalEndMSec:
+			 	break
+			if (firstRowToCheck):
+			 	firstRowToCheck = False
+			else:
+				writeRow(timeIDMap, t, previousRow, writer, personID)
+			previousRow = row
+		writeRow(timeIDMap, t, previousRow, writer, personID)
+
+	outfile.close()
 	csvfile.close()
 
 # def processCSVHelper(csvFile, ts, timeIDMap, folderName, totalStartMSec, totalEndMSec, startTime, absPath):
@@ -169,7 +176,7 @@ def createTimingDict(absPath, totalStartMSec, totalEndMSec, ts, fps):
 			timeIDMap.update({fpsTime: previousRow["body_idx"]})
 	return timeIDMap
 
-def processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap):
+def processCSVs(csvList, startTime, folderName, absPath, ts, fps, totalStartMSec, totalEndMSec, timeIDMap):
 	for csvFile in csvList:
 		name = "log" + csvFile + "_" + ts + "_person"
 		name2 = "log" + csvFile + "_" + ts
@@ -242,7 +249,9 @@ def createAnnotation(startTime, folderName, absPath, aPathComplete, sTime, eTime
 
 		csvFile.close()
 
-def processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, timeIDMap):
+def processAnno(startTime, folderName, absPath, ts, timeIDMap):
+	annoBoundaries = []
+
 	aPath = absPath + "annotation/"
 	with open(aPath + 'map.json') as jFile:
 		jsonData = json.load(jFile)
@@ -267,6 +276,9 @@ def processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, 
 					sTime = jsonData[f][0]
 					eTime = jsonData[f][1]
 					createAnnotation(startTime, folderName, absPath, aPath + file, sTime, eTime, labelsDict)
+					annoBoundaries.append( (sTime,eTime) )
+
+	return annoBoundaries
 
 def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, fps, counter, features, annotations, nV):
 	startTime = 0
@@ -304,8 +316,7 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, totalSt
 
 	timeIDMap = createTimingDict(absPath, totalStartMSec, totalEndMSec, ts, fps) #generate dictionary of timings that all csvs will follow (also has current body indx for any time)
 	# print repr(sorted(timeIDMap))
-	if features:
-		processCSVs(csvList, startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, fps, totalStartMSec, totalEndMSec, timeIDMap)
+
 	#for each csv, process the data and output it based on the timeIDMap
 
 	#folder multiplePeopleDeidentifiedImageData
@@ -314,7 +325,16 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, totalSt
 	dataList = ["DrawingPointsCLMEyeGaze", "DrawingPointsCLMEyes", "DrawingPointsCLMFace", "DrawingPointsKinectHDFace"] # TODO do we process this or is it redundant?
 	#processSinglePersonData(dataList)
 	if annotations:
-		processAnno(startTime, folderName, absPath, ts, startMin, startSec, endMin, endSec, totalStartMSec, totalEndMSec, timeIDMap)
+		annoBoundaries = processAnno(startTime, folderName, absPath, ts, timeIDMap)
+
+	if features:
+		if annotations:
+			for (totalStartMSec, totalStartMSec) in sorted(annoBoundaries): #ASSUME boundaries dont overlap
+				processCSVs(csvList, startTime, folderName, absPath, ts, fps, totalStartMSec, totalStartMSec, timeIDMap)
+		else:
+			processCSVs(csvList, startTime, folderName, absPath, ts, fps, totalStartMSec, totalStartMSec, timeIDMap)
+
+
 		#process the annotations to create our labels.csv file
 		#uses annotations folder in data directory for annotations (map.json stores .eaf file names mapping to the timing the file is in the entire data set)
 
@@ -417,11 +437,6 @@ if __name__ == "__main__":
 			expTime = "DataCollection_" + expTime
 			print str(parseInputs(dataSet, expTime, startTime, endTime, mode, fps = fps, features = True, annotations = anno, nV = True))
 
-
-		#things to consider: how to minimize wasted time: 1. start and end time for the actions in each eaf file... -> for extracting data...?
-		#one-> I have list of annotations
-		#two-> I may have overlapping video annotations
-		#the annotations are used to determine which data to pull. What if there are conflicting annotations?? error message, probably a good idea
 
 	elif mode == 1:
 		eafs = [raw_input("Enter a .eaf file that specifies clip regions of interest: ")]
