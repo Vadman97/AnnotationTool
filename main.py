@@ -64,6 +64,10 @@ def writeRow(timeIDMap, curTime, previousRow, writer, personID):
  					rowToWrite = previousRow
  					rowToWrite["absTime"] = timeCounter
  					writer.writerow(rowToWrite)
+ 			elif personID == -1:
+ 				rowToWrite = previousRow
+				rowToWrite["absTime"] = timeCounter
+				writer.writerow(rowToWrite)			
 
  			break
  		timeCounter += 1
@@ -77,7 +81,7 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 		fo.write(data.replace('\x00', '0'))
 		fo.close()
 
-	print inFile
+	#print inFile
 
 	with open(inFile, 'rb') as csvfile:
 		csvExists = os.path.isfile(outFile)
@@ -86,7 +90,7 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 		fieldnames.insert(0, 'absTime')
 
 		if csvExists: #append, dont writer header again
-			outfile = open(outFile, 'a')
+			outfile = open(outFile, 'ab')
 			writer = csv.DictWriter(outfile, delimiter=',', fieldnames=fieldnames)
 		else:
 			outfile = open(outFile, 'wb') #write csv from start
@@ -98,21 +102,31 @@ def writeCSV(timeIDMap, inFile, outFile, totalStartMSec, totalEndMSec, startTime
 		rowToWrite = dict()
 		firstRowToCheck = True
 
+		# rownum = 0
 		for row in reader: 
+			# rownum+=1
+
 			if None in row:
 				row["body_idxs"] = row[None]
 				del row[None]
 			t = float(row['time'])
+
+			#print "t: " + repr(t) + " start: " + repr(totalStartMSec) + " end: " + repr(totalEndMSec)
+
 			if t < totalStartMSec:
 				continue
 			if t > totalEndMSec:
 			 	break
+			# print "rownum " + rownum 
+			# print "row " + row
+			#print t
 			if (firstRowToCheck):
 			 	firstRowToCheck = False
 			else:
 				writeRow(timeIDMap, t, previousRow, writer, personID)
 			previousRow = row
-		writeRow(timeIDMap, t, previousRow, writer, personID)
+		if previousRow:
+			writeRow(timeIDMap, t, previousRow, writer, personID)
 
 	outfile.close()
 	csvfile.close()
@@ -329,10 +343,11 @@ def process(folderName, absPath, ts, startMin, startSec, endMin, endSec, totalSt
 
 	if features:
 		if annotations:
-			for (totalStartMSec, totalStartMSec) in sorted(annoBoundaries): #ASSUME boundaries dont overlap
-				processCSVs(csvList, startTime, folderName, absPath, ts, fps, totalStartMSec, totalStartMSec, timeIDMap)
+			for idx, (totalStartMSec, totalEndMSec) in enumerate(sorted(annoBoundaries)): #ASSUME boundaries dont overlap
+				processCSVs(csvList, startTime, folderName, absPath, ts, fps, totalStartMSec, totalEndMSec, timeIDMap)
+				print "done with " + str(idx + 1) + "/" + str(len(annoBoundaries)) + " annotations" 
 		else:
-			processCSVs(csvList, startTime, folderName, absPath, ts, fps, totalStartMSec, totalStartMSec, timeIDMap)
+			processCSVs(csvList, startTime, folderName, absPath, ts, fps, totalStartMSec, totalEndMSec, timeIDMap)
 
 
 		#process the annotations to create our labels.csv file
@@ -425,11 +440,13 @@ if __name__ == "__main__":
 	if mode == 2:
 		expTimes = [raw_input("Enter an experiment timestamp (eg: 4-14-2016_14-24-38): ")]
 		if len(expTimes[0]) == 0:
-			expTimes = ["4-14-2016_9-50-46","4-14-2016_10-8-52","4-14-2016_10-32-53","4-14-2016_10-41-51","4-14-2016_10-56-10","4-14-2016_11-27-1"]
-
+			expTimes = ["4-14-2016_9-5-46","4-14-2016_9-30-31","4-14-2016_9-50-46","4-14-2016_10-8-52","4-14-2016_10-32-53","4-14-2016_10-41-51","4-14-2016_10-56-10","4-14-2016_11-27-1"]
+			# ["4-14-2016_10-32-53","4-14-2016_10-41-51","4-14-2016_10-56-10","4-14-2016_11-27-1"] 
+			
 		fps = raw_input("Enter output video fps: ")
 		startTime = raw_input("Enter the data start time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:30) or in miliseconds:
-		endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
+		endTime = "100000000000000000000000"
+		#endTime = raw_input("Enter the data end time (min:sec OR miliseconds): ") # (time from the processed video, eg: 10:35) or in miliseconds:
 		processAnnotations = raw_input("Process annotations? (t,f): ") # requires an annotations subfolder in the data folder
 		anno = True if processAnnotations == "t" or processAnnotations == "T" else False
 
